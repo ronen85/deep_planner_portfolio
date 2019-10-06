@@ -69,8 +69,6 @@ class PlaNet(nn.Module):
             num_features *= s
         return num_features
 
-
-
 class MLP_1(nn.Module):
     """
     (1x128x128) => 1024-RLU => 256-RLU => 29
