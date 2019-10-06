@@ -1,5 +1,8 @@
 .idea/
 archive/
+0_saved_models/
+1_saved_models/
+saved_models/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

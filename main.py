@@ -1,20 +1,21 @@
 import os
 import numpy as np
-import pandas as pd
+# import pandas as pd
 import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from torchvision import transforms
-import matplotlib.pyplot as plt
-from skimage import io, transform, util
-from scipy.fftpack import fft2
-from sklearn.preprocessing import RobustScaler, MinMaxScaler
+# import matplotlib.pyplot as plt
+# from skimage import io, transform, util
+# from scipy.fftpack import fft2
+# from sklearn.preprocessing import RobustScaler, MinMaxScaler
 from pp_dataset import PlannerPortfolioDataset
 from architectures import PlaNet
 import argparse
 import logging
+import time
 torch.manual_seed(42)
 
 
@@ -37,10 +38,10 @@ parser.add_argument('net_key', type=str, help='the key of the desired net.',
                     choices=key_list)
 parser.add_argument('use_ft', type=int, help='use fourier transform on the data.', choices=list(range(2)))
 parser.add_argument('-optimizer', type=str, help='what optim to use?', choices=['Adam', 'SGD'], default='Adam')
-parser.add_argument('-epochs', type=int, help='ho many epochs to perform', default=30)
-parser.add_argument('-batch', type=int, help='ho many batches', default=6)
-parser.add_argument('-lr', type=float, help='learning rate', default=0.0001)
-parser.add_argument('-betas', type=float, help='betas for Adam optim', default=(0.8,0.999))
+parser.add_argument('-epochs', type=int, help='ho many epochs to perform', default=1000)
+parser.add_argument('-batch', type=int, help='ho many batches', default=4)
+parser.add_argument('-lr', type=float, help='learning rate', default=0.00001)
+parser.add_argument('-betas', type=float, help='betas for Adam optim', default=(0.9,0.9999))
 parser.add_argument('-momentum', type=float, help='momentum for SGD optim', default=0.9)
 
 if __name__ == '__main__':
@@ -151,42 +152,86 @@ if __name__ == '__main__':
 
     best_acc = 0
     logger.info(f'Training Initiated.')
-    loss_graph = []
+
+    # to track the training loss as the model trains
+    train_losses = []
+    # to track the validation loss as the model trains
+    valid_losses = []
+    # to track the average training loss per epoch as the model trains
+    avg_train_losses = []
+    # to track the average validation loss per epoch as the model trains
+    avg_valid_losses = []
+
+    best_valid_loss = 10.0
+    patience = 15
+    epochs_without_improvement = 0
+
     for epoch in range(exp_dict['max_num_epochs']):  # loop over the dataset multiple times
+        t0 = time.time()
+        ###################
+        # train the model #
+        ###################
+        net.train()
         running_loss = 0.0
         for i, sample in enumerate(train_loader):
-            net.train()
             inputs, targets = sample
-
             # zero the parameter gradients
             optimizer.zero_grad()
-
             # forward + backward + optimize
             outputs = net(inputs)
             loss = criterion(outputs, targets)
             loss.backward()
             optimizer.step()
+            # record training loss
+            train_losses.append(loss.item())
 
-            # print statistics
-            running_loss += loss.item()
-            if (i % 100 == 99):
-                net.eval()
-                correct = 0
-                total = 0
-                with torch.no_grad():
-                    for data in valid_loader:
-                        images, labels = data
-                        outputs = net(images)
-                        for j, idx in enumerate(torch.argmax(outputs, dim=1)):
-                            total += 1
-                            correct += int(labels[j, idx])
-                    acc = round(correct / total, 3)
-                logger.info(f'[{epoch + 1}, {i + 1}] loss: {(running_loss / 50):8.4f}, accuracy: {acc}')
-                running_loss = 0.0
-                if acc > best_acc:
-                    best_acc = acc
-                    logger.info('New best model, saving ...')
-                    torch.save(net, exp_dict['path_to_model'])
+        ######################
+        # validate the model #
+        ######################
+        net.eval() # prep model for evaluation
+        for i, sample in enumerate(valid_loader):
+            inputs, targets = sample
+            # forward pass: compute predicted outputs by passing inputs to the model
+            outputs = net(inputs)
+            # calculate the loss
+            loss = criterion(outputs, targets)
+            # record validation loss
+            valid_losses.append(loss.item())
+
+        # print training/validation statistics
+        # calculate average loss over an epoch
+        train_loss = np.average(train_losses)
+        valid_loss = np.average(valid_losses)
+        avg_train_losses.append(train_loss)
+        avg_valid_losses.append(valid_loss)
+
+        epoch_time = round(time.time() - t0, 2)
+
+        print_msg = (f'[{epoch}/{exp_dict["max_num_epochs"]}] ' +
+                     f'train_loss: {train_loss:.5f} ' +
+                     f'valid_loss: {valid_loss:.5f} ' +
+                     f'epoch time: {epoch_time}')
+
+        logger.info(print_msg)
+
+        # clear lists to track next epoch
+        train_losses = []
+        valid_losses = []
+
+
+        if valid_loss < best_valid_loss:
+            best_valid_loss = valid_loss*0.99
+            logger.info('New best model, saving ...')
+            torch.save(net, exp_dict['path_to_model'])
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        if epochs_without_improvement > patience:
+            logger.info("Early stopping")
+            logger.info(f"train loss: {avg_train_losses}")
+            logger.info(f"valid loss: {avg_valid_losses}")
+            break
 
     """ TEST BEST MODEL """
     logger.info(f'\nBest Model Test Initiated.')

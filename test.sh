@@ -1,5 +1,3 @@
-#!/bin/sh
-
 python3 main.py net_1 0 -optimizer Adam
 python3 main.py net_1 0 -optimizer SGD
 python3 main.py net_1 1 -optimizer Adam
