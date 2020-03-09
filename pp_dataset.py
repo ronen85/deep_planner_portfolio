@@ -67,3 +67,27 @@ class PlannerPortfolioDataset(Dataset):
             image.unsqueeze_(0)
 
         return image, planner_results
+
+    def get_image(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        problem_name = self.df.iloc[idx]['filename']
+        problem_image_path = os.path.join(self.image_dir, problem_name + '-bolded-cs.png')
+        image = io.imread(problem_image_path)
+        return image
+
+    def get_ft_image(self, idx):
+        if torch.is_tensor(idx):
+            idx = idx.tolist()
+        problem_name = self.df.iloc[idx]['filename']
+        problem_image_path = os.path.join(self.image_dir, problem_name + '-bolded-cs.png')
+        image = io.imread(problem_image_path)
+        image = util.invert(image)
+        image = np.asarray(image)
+        image = image.astype('float32')
+        image = image / 255.0  # Normalize the data
+        transformed_image = fft2(image)
+        # transformed_image = transformed_image / transformed_image[0, 0]
+        # real_transformed_image = np.real(transformed_image) + np.imag(transformed_image)
+        return transformed_image
+

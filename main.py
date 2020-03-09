@@ -18,6 +18,8 @@ import logging
 import time
 torch.manual_seed(42)
 
+def count_parameters(model):
+    return sum(p.numel() for p in model.parameters() if p.requires_grad)
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 # device = 'cpu'
@@ -45,10 +47,10 @@ parser.add_argument('-betas', type=float, help='betas for Adam optim', default=(
 parser.add_argument('-momentum', type=float, help='momentum for SGD optim', default=0.9)
 
 if __name__ == '__main__':
-    args = parser.parse_args()  # Disable during debugging
+    # args = parser.parse_args()  # Disable during debugging
 
-    # args = argparse.Namespace(net_key='net_3_triple', use_ft=False, optimizer='Adam', epochs=20, batch=4,
-    #                           lr=0.0001, betas=(0.8,0.999)) # For debugging purposes
+    args = argparse.Namespace(net_key='net_3_double', use_ft=True, optimizer='Adam', epochs=1000, batch=6,
+                              lr=0.000001, betas=(0.95,0.999)) # For debugging purposes
 
     """ SETUP EXPERIMENT """
     path_to_model = 'saved_models/' + args.net_key + '_' +  args.optimizer + '_'
@@ -60,9 +62,9 @@ if __name__ == '__main__':
     log_file = path_to_model.replace('.pt', '.log')
     logging.basicConfig(level=logging.INFO)
     logger = logging.getLogger(__name__)
-    handler = logging.FileHandler(log_file, '+w')
-    handler.setLevel(logging.INFO)
-    logger.addHandler(handler)
+    # handler = logging.FileHandler(log_file, '+w')
+    # handler.setLevel(logging.INFO)
+    # logger.addHandler(handler)
 
 
     if args.optimizer == 'Adam':
@@ -100,6 +102,7 @@ if __name__ == '__main__':
     net = PlaNet(net_key, input_size=input_size)
     net = net.to(device)
     logger.info(f'CNN established:\n{net}')
+    logger.info(f'Number of trainable parameters in the net: {count_parameters(net)}')
 
 
     # # test it with a random input
@@ -220,7 +223,7 @@ if __name__ == '__main__':
 
 
         if valid_loss < best_valid_loss:
-            best_valid_loss = valid_loss*0.99
+            best_valid_loss = valid_loss*0.995
             logger.info('New best model, saving ...')
             torch.save(net, exp_dict['path_to_model'])
             epochs_without_improvement = 0
